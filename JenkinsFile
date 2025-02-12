@@ -1,0 +1,64 @@
+pipeline {
+        agent {
+        label 'slave'
+    }
+    stages {
+        stage('Checkout') {
+            steps {
+                git ''
+            }
+        }
+        stage('Build') {
+            steps {
+                script {
+                    def mvnHome = tool 'M3'
+                    sh "${mvnHome}/bin/mvn clean package"
+                }
+            }
+        }
+        stage('Sonar Analysis') {
+            steps {
+                withSonarQubeEnv('sonar') {
+                    sh '''${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=java-tomcat-sample \
+                        -Dsonar.projectName=java-tomcat-sample \
+                        -Dsonar.projectVersion=4.0 \
+                        -Dsonar.sources=src/ \
+                        -Dsonar.junit.reportsPath=target/surefire-reports/ \
+                        -Dsonar.jacoco.reportsPath=target/jacoco.exec \
+                        -Dsonar.java.checkstyle.reportPaths=target/checkstyle-result.xml'''
+                }
+            }
+        }
+        stage('Docker Build and Push') {
+            steps {
+                script {
+                    sh 'docker build -t myapp:latest .'
+                    sh 'docker tag myapp:latest localhost:5000/myapp:latest'
+                    sh 'docker push localhost:5000/myapp:latest'
+                }
+            }
+        }
+    }
+    post {
+        success {
+            mail to: 'sarjakytdfiles@gmail.com',
+                 subject: 'BUILD SUCCESS NOTIFICATION',
+                 body: """Hi Sarjak,
+
+Build #${BUILD_NUMBER} is successful, please go through the url: ${BUILD_URL}
+
+Regards,
+Jenkins"""
+        }
+        failure {
+            mail to: 'sarjakytdfiles@gmail.com',
+                 subject: 'BUILD FAILED NOTIFICATION',
+                 body: """Hi Sarjak,
+
+Build #${BUILD_NUMBER} failed, please go through the url: ${BUILD_URL}
+
+Regards,
+Jenkins"""
+        }
+    }
+}
